@@ -139,12 +139,17 @@ struct ErrorMinimizersImpl
 		const bool force2D;
 	    const T sensorStdDev;
 		Matrix covMatrix;
+		Matrix sysCovMatrix;
 		
 		PointToPlaneWithCovErrorMinimizer(const Parameters& params = Parameters());
 		virtual TransformationParameters compute(const DataPoints& filteredReading, const DataPoints& filteredReference, const OutlierWeights& outlierWeights, const Matches& matches);
 		virtual T getOverlap() const;
 		virtual Matrix getCovariance() const;
+		// simalpha
+		virtual Matrix getSystemCovariance() const;
 		Matrix estimateCovariance(const DataPoints& reading, const DataPoints& reference, const Matches& matches, const OutlierWeights& outlierWeights, const TransformationParameters& transformation);
+		// simalpha
+		Matrix estimateSystemCovariance(const Matrix& A);
 	};
 }; // ErrorMinimizersImpl
 

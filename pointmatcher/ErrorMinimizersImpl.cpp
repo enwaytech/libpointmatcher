@@ -624,8 +624,19 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 	}
 
 	this->covMatrix = this->estimateCovariance(filteredReading, filteredReference, matches, outlierWeights, mOut);
+	this->sysCovMatrix = this->estimateSystemCovariance(A);
 
 	return mOut; 
+}
+
+// simalpha
+template<typename T>
+typename ErrorMinimizersImpl<T>::Matrix
+ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovariance(const Matrix& A)
+{
+       Matrix covariance(Matrix::Zero(6,6));
+       covariance = A.transpose() * A;
+       return covariance;
 }
 
 template<typename T>
@@ -650,9 +661,9 @@ ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateCovariance(co
 	if (normals.rows() < 3)    // Make sure there are normals in DataPoints
 		return std::numeric_limits<T>::max() * Matrix::Identity(6,6);
 
-	T beta = -asin(transformation(2,0));
-	T alpha = atan2(transformation(2,1), transformation(2,2));
-	T gamma = atan2(transformation(1,0)/cos(beta), transformation(0,0)/cos(beta));
+	T beta = -asin(transformation(2,0));					       // pitch
+	T alpha = atan2(transformation(2,1), transformation(2,2));                     // yaw
+	T gamma = atan2(transformation(1,0)/cos(beta), transformation(0,0)/cos(beta)); // roll
 	T t_x = transformation(0,3);
 	T t_y = transformation(1,3);
 	T t_z = transformation(2,3);
@@ -760,6 +771,13 @@ template<typename T>
 typename ErrorMinimizersImpl<T>::Matrix ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::getCovariance() const
 {
   return covMatrix;
+}
+
+// simalpha
+template<typename T>
+typename ErrorMinimizersImpl<T>::Matrix ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::getSystemCovariance() const
+{
+  return sysCovMatrix;
 }
 
 template struct ErrorMinimizersImpl<float>::PointToPlaneWithCovErrorMinimizer;
