@@ -580,10 +580,12 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 
 	// b = -(wF' * dot)
 	const Vector b = -(wF * dotProd.transpose());
+	//std::cout << "[Lpm Error Minimizer] b: " << endl << b << std::endl;
 
 	// Cholesky decomposition
 	Vector x(A.rows());
-	x = A.llt().solve(b);
+	x = A.llt().solve(b); //Linear least square solution of Ax = b
+	//std::cout << "[Lpm Error Minimizer] A * x: " << endl << A * x << std::endl;
 	
 	// Transform parameters to matrix
 	Matrix mOut;
@@ -623,10 +625,26 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 		}
 	}
 
+	// Covariance matrix of the linear least square solution (Ax = b -> x = (A^T*A)^(-1)*A^T * b)
 	this->covMatrix = this->estimateCovariance(filteredReading, filteredReference, matches, outlierWeights, mOut);
-	this->sysCovMatrix = this->estimateSystemCovariance(A);
+
+	// Compute system covariance matrix at first iteration only
+	if(this->sysCovMatrix.isZero())
+		this->sysCovMatrix = this->estimateSystemCovariance(A);
+
+	// A^T * A * x should be = to A^T * b
+	//std::cout << "[Lpm Error Minimizer] A^T * A * x: " << endl << this->sysCovMatrix * x << std::endl;
+	//std::cout << "[Lpm Error Minimizer] A^T * b: " << endl << A.transpose() * b << std::endl;
 
 	return mOut; 
+}
+
+// simalpha
+template<typename T>
+T ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::resetSystemCovariance()
+{
+       sysCovMatrix.setZero();
+       return 0;
 }
 
 // simalpha

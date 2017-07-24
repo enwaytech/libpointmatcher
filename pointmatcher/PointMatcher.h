@@ -526,6 +526,8 @@ struct PointMatcher
 		ErrorElements getErrorElements() const; //TODO: ensure that is return a usable value
 		virtual T getOverlap() const;
 		virtual Matrix getCovariance() const;
+		virtual T resetSystemCovariance(); // simalpha
+		virtual Matrix getSystemCovariance() const; //simalpha
 		
 		//! Find the transformation that minimizes the error
 		virtual TransformationParameters compute(const DataPoints& filteredReading, const DataPoints& filteredReference, const OutlierWeights& outlierWeights, const Matches& matches) = 0;

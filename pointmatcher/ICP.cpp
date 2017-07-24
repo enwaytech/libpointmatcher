@@ -370,6 +370,9 @@ typename PointMatcher<T>::TransformationParameters PointMatcher<T>::ICP::compute
 		// Error minimization
 		// equivalent to: 
 		//   T_iter(i+1)_iter(0) = T_iter(i+1)_iter(i) * T_iter(i)_iter(0)
+		if (iterationCount == 0) // set to zero matrix at the first iteration
+		  this->errorMinimizer->resetSystemCovariance();
+
 		T_iter = this->errorMinimizer->compute(
 			stepReading, reference, outlierWeights, matches) * T_iter;
 		
