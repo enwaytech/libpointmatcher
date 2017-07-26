@@ -267,7 +267,7 @@ struct PointMatcher
 		DataPoints createSimilarEmpty() const;
 		DataPoints createSimilarEmpty(Index pointCount) const;
 		void setColFrom(Index thisCol, const DataPoints& that, Index thatCol);
-		
+
 		// methods related to features
 		void allocateFeature(const std::string& name, const unsigned dim);
 		void allocateFeatures(const Labels& newLabels);
@@ -282,6 +282,7 @@ struct PointMatcher
 		bool featureExists(const std::string& name, const unsigned dim) const;
 		unsigned getFeatureDimension(const std::string& name) const;
 		unsigned getFeatureStartingRow(const std::string& name) const;
+		unsigned int computeFeaturesCentroid(Vector& centroid) const; //(simalpha)
 		
 		// methods related to descriptors
 		void allocateDescriptor(const std::string& name, const unsigned dim);

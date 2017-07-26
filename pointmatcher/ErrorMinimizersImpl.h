@@ -149,6 +149,10 @@ struct ErrorMinimizersImpl
 		virtual Matrix getSystemCovariance() const; // simalpha
 		Matrix estimateCovariance(const DataPoints& reading, const DataPoints& reference, const Matches& matches, const OutlierWeights& outlierWeights, const TransformationParameters& transformation);
 		Matrix estimateSystemCovariance(const Matrix& A); // simalpha
+		Matrix estimateSystemCovariance(const DataPoints& filteredReading,
+						const DataPoints& filteredReference,
+						const OutlierWeights& outlierWeights,
+						const Matches& matches); // simalpha
 	};
 }; // ErrorMinimizersImpl
 

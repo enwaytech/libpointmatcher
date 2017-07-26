@@ -499,6 +499,28 @@ unsigned PointMatcher<T>::DataPoints::getFeatureStartingRow(const std::string& n
 	return getFieldStartingRow(name, featureLabels);
 }
 
+//! Compute the 3D (X-Y-Z) centroid of a set of points and return it as a 3D vector
+template<typename T> //(simalpha)
+unsigned int PointMatcher<T>::DataPoints::computeFeaturesCentroid(PointMatcher<T>::Vector& centroid) const
+{
+         if (this->getNbPoints() == 0)
+           return (0);
+
+         // Initialize to 0
+         centroid.setZero ();
+         // For each point in the cloud
+         for (size_t i = 0; i < this->getNbPoints(); ++i)
+         {
+           centroid[0] += features.col(i)[0];
+           centroid[1] += features.col(i)[1];
+           centroid[2] += features.col(i)[2];
+         }
+         centroid /= float(this->getNbPoints());
+         centroid[3] = 1;
+
+         return this->getNbPoints();
+}
+
 //------------------------------------
 // Methods related to descriptors
 //------------------------------------

@@ -626,15 +626,18 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 	}
 
 	// Covariance matrix of the linear least square solution (Ax = b -> x = (A^T*A)^(-1)*A^T * b)
-	this->covMatrix = this->estimateCovariance(filteredReading, filteredReference, matches, outlierWeights, mOut);
+	//this->covMatrix = this->estimateCovariance(filteredReading, filteredReference, matches, outlierWeights, mOut);
 
 	// Compute system covariance matrix at first iteration only
 	if(this->sysCovMatrix.isZero())
-		this->sysCovMatrix = this->estimateSystemCovariance(A);
+	{
+		//this->sysCovMatrix = this->estimateSystemCovariance(A);
+		this->sysCovMatrix = this->estimateSystemCovariance(filteredReading, filteredReference, outlierWeights, matches);
+	}
 
 	// A^T * A * x should be = to A^T * b
-	//std::cout << "[Lpm Error Minimizer] A^T * A * x: " << endl << this->sysCovMatrix * x << std::endl;
-	//std::cout << "[Lpm Error Minimizer] A^T * b: " << endl << A.transpose() * b << std::endl;
+	//std::cout << "[Error Minimizer] A^T * A * x: " << endl << this->sysCovMatrix * x << std::endl;
+	//std::cout << "[Error Minimizer] A^T * b: " << endl << A.transpose() * b << std::endl;
 
 	return mOut; 
 }
@@ -648,12 +651,99 @@ T ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::resetSystemCovarian
 }
 
 // simalpha
+// Compute A^T*A (called here system covariance)
+// given A
 template<typename T>
 typename ErrorMinimizersImpl<T>::Matrix
 ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovariance(const Matrix& A)
 {
        Matrix covariance(Matrix::Zero(6,6));
        covariance = A.transpose() * A;
+       return covariance;
+}
+
+// simalpha
+// Compute A^T*A (called here system covariance)
+// from scratch. Before computing A:
+//                    1) the reading cloud center of mass is shifted to zero
+//                    2) the reading cloud points are scaled s.t. their average distance from the origin is 1
+// (from "Geometrically Stable Sampling for the ICP algorithm", N. Gelfand et al., 2003)
+template<typename T>
+typename ErrorMinimizersImpl<T>::Matrix
+ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovariance(
+								const DataPoints& filteredReading,
+								const DataPoints& filteredReference,
+								const OutlierWeights& outlierWeights,
+								const Matches& matches)
+{
+       // Fetch paired points
+       typename ErrorMinimizer::ErrorElements& mPts = this->getMatchedPoints(filteredReading, filteredReference, matches, outlierWeights);
+
+       const int dim = mPts.reading.features.rows();
+
+       // Fetch normal vectors of the reading point cloud (with adjustment if needed)
+       // (using reading normals instead of reference normals)
+       int forcedDim = dim - 1;
+       const BOOST_AUTO(normalRead, mPts.reading.getDescriptorViewByName("normals").topRows(forcedDim));
+
+       // Note: Normal vector must be precalculated to use this error. Use appropriate input filter.
+       assert(normalRead.rows() > 0);
+
+       // 1) shift reading cloud center of mass to zero
+       typename PointMatcher<T>::Vector centroid(4);
+       mPts.reading.computeFeaturesCentroid(centroid);
+       // for each point in the cloud
+       for (size_t i = 0; i < mPts.reading.getNbPoints(); ++i)
+       {
+         mPts.reading.features.col(i)[0] = mPts.reading.features.col(i)[0] - centroid[0];
+         mPts.reading.features.col(i)[1] = mPts.reading.features.col(i)[1] - centroid[1];
+         mPts.reading.features.col(i)[2] = mPts.reading.features.col(i)[2] - centroid[2];
+       }
+       // for each normal in the cloud
+       for (size_t i = 0; i < mPts.reading.getNbPoints(); ++i)
+       {
+           mPts.reading.descriptors.col(i)[0] = mPts.reading.descriptors.col(i)[0] - centroid[0];
+           mPts.reading.descriptors.col(i)[1] = mPts.reading.descriptors.col(i)[1] - centroid[1];
+           mPts.reading.descriptors.col(i)[2] = mPts.reading.descriptors.col(i)[2] - centroid[2];
+       }
+       mPts.reading.computeFeaturesCentroid(centroid);
+       std::cout << "[Error Minimizer] Features Centroid: \n" << centroid << std::endl;
+
+       // 2) scale the reading cloud points s.t. their average distance from the origin is 1
+       // TODO
+
+//       // Compute cross product of cross = cross(reading X normalRead)
+//       const Matrix cross = this->crossProduct(mPts.reading.features, normalRead);
+
+//       // wF = [weights*cross, weight*normals]
+//       // F  = [cross, normals]
+//       Matrix wF(normalRead.rows()+ cross.rows(), normalRead.cols());
+//       Matrix F(normalRead.rows()+ cross.rows(), normalRead.cols());
+
+//       for(int i=0; i < cross.rows(); i++)
+//       {
+//              wF.row(i) = mPts.weights.array() * cross.row(i).array();
+//              F.row(i) = cross.row(i);
+//       }
+//       for(int i=0; i < normalRead.rows(); i++)
+//       {
+//              wF.row(i + cross.rows()) = mPts.weights.array() * normalRead.row(i).array();
+//              F.row(i + cross.rows()) = normalRead.row(i);
+//       }
+
+//       // Unadjust covariance A = wF * F'
+//       const Matrix A = wF * F.transpose();
+//       if (A.fullPivHouseholderQr().rank() != A.rows())
+//       {
+//              // TODO: handle that properly
+//              //throw ConvergenceError("encountered singular while minimizing point to plane distance");
+//       }
+
+
+
+       // TMP: TO BE REMOVED
+       Matrix covariance(Matrix::Identity(6,6));
+       //covariance = A.transpose() * A;
        return covariance;
 }
 
