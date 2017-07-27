@@ -504,7 +504,8 @@ template<typename T>
 ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::PointToPlaneWithCovErrorMinimizer(const Parameters& params):
 	ErrorMinimizer("PointToPlaneWithCovErrorMinimizer", PointToPlaneWithCovErrorMinimizer::availableParameters(), params),
 	force2D(Parametrizable::get<T>("force2D")),
-	sensorStdDev(Parametrizable::get<T>("sensorStdDev"))
+	sensorStdDev(Parametrizable::get<T>("sensorStdDev")),
+	failPredStrategy(Parametrizable::get<unsigned>("failPredStrategy")) // simalpha
 {
 }
 
@@ -580,12 +581,12 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 
 	// b = -(wF' * dot)
 	const Vector b = -(wF * dotProd.transpose());
-	//std::cout << "[Lpm Error Minimizer] b: " << endl << b << std::endl;
+	//std::cout << "[Error Minimizer] b: " << endl << b << std::endl;
 
 	// Cholesky decomposition
 	Vector x(A.rows());
 	x = A.llt().solve(b); //Linear least square solution of Ax = b
-	//std::cout << "[Lpm Error Minimizer] A * x: " << endl << A * x << std::endl;
+	//std::cout << "[Error Minimizer] A * x: " << endl << A * x << std::endl;
 	
 	// Transform parameters to matrix
 	Matrix mOut;
@@ -626,13 +627,24 @@ typename PointMatcher<T>::TransformationParameters ErrorMinimizersImpl<T>::Point
 	}
 
 	// Covariance matrix of the linear least square solution (Ax = b -> x = (A^T*A)^(-1)*A^T * b)
+	// Commented out by simalpha
 	//this->covMatrix = this->estimateCovariance(filteredReading, filteredReference, matches, outlierWeights, mOut);
 
-	// Compute system covariance matrix at first iteration only
+	// Compute system covariance matrix at first iteration only (simalpha)
 	if(this->sysCovMatrix.isZero())
 	{
-		//this->sysCovMatrix = this->estimateSystemCovariance(A);
-		this->sysCovMatrix = this->estimateSystemCovariance(filteredReading, filteredReference, outlierWeights, matches);
+		if(failPredStrategy == 0)
+		{
+			std::cout << "[Error Minimizer] Using Geometrically Stable Sampling for the ICP Algorithm" << std::endl;
+			// Implementation "Geometrically Stable Sampling for the ICP Algorithm", J. Gelfand et al., 2003
+			this->sysCovMatrix = this->estimateSystemCovariance(filteredReading, filteredReference, outlierWeights, matches);
+		}
+		else if(failPredStrategy == 1)
+		{
+			std::cout << "[Error Minimizer] Using On Degeneracy of Optimization-based State Estimation Problems" << std::endl;
+			// Implementation "On Degeneracy of Optimization-based State Estimation Problems", J. Zhang et al., 2016
+			this->sysCovMatrix = this->estimateSystemCovariance(A);
+		}
 	}
 
 	// A^T * A * x should be = to A^T * b
@@ -653,6 +665,7 @@ T ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::resetSystemCovarian
 // simalpha
 // Compute A^T*A (called here system covariance)
 // given A
+// (from "On Degeneracy of Optimization-based State Estimation Problems", J. Zhang et al., 2016)
 template<typename T>
 typename ErrorMinimizersImpl<T>::Matrix
 ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovariance(const Matrix& A)
@@ -689,61 +702,60 @@ ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovaria
        // Note: Normal vector must be precalculated to use this error. Use appropriate input filter.
        assert(normalRead.rows() > 0);
 
-       // 1) shift reading cloud center of mass to zero
+       // Note: Normals are stored in descriptors ("nx","ny","nz")
+       // and have origin in the global reference frame (0,0,0)
+       // i.e. sqrt( nx^2 + ny^2 + nz^2 ) = 1
+       // therefore normals do not need 1) centering and 2) shifting
+
+       // 1) Shift reading cloud center of mass to zero
        typename PointMatcher<T>::Vector centroid(4);
        mPts.reading.computeFeaturesCentroid(centroid);
-       // for each point in the cloud
+       // for each point in the cloud -> center
        for (size_t i = 0; i < mPts.reading.getNbPoints(); ++i)
        {
-         mPts.reading.features.col(i)[0] = mPts.reading.features.col(i)[0] - centroid[0];
-         mPts.reading.features.col(i)[1] = mPts.reading.features.col(i)[1] - centroid[1];
-         mPts.reading.features.col(i)[2] = mPts.reading.features.col(i)[2] - centroid[2];
+         mPts.reading.features.col(i)[0] = (mPts.reading.features.col(i)[0] - centroid[0]);
+         mPts.reading.features.col(i)[1] = (mPts.reading.features.col(i)[1] - centroid[1]);
+         mPts.reading.features.col(i)[2] = (mPts.reading.features.col(i)[2] - centroid[2]);
        }
-       // for each normal in the cloud
+
+       // 2) Scale the reading cloud points s.t. their average distance from the origin is 1
+       float distance = mPts.reading.computeFeaturesAverageDistanceOrigin();
+       // for each point in the cloud -> scale
        for (size_t i = 0; i < mPts.reading.getNbPoints(); ++i)
        {
-           mPts.reading.descriptors.col(i)[0] = mPts.reading.descriptors.col(i)[0] - centroid[0];
-           mPts.reading.descriptors.col(i)[1] = mPts.reading.descriptors.col(i)[1] - centroid[1];
-           mPts.reading.descriptors.col(i)[2] = mPts.reading.descriptors.col(i)[2] - centroid[2];
+         mPts.reading.features.col(i)[0] = (mPts.reading.features.col(i)[0])/distance;
+         mPts.reading.features.col(i)[1] = (mPts.reading.features.col(i)[1])/distance;
+         mPts.reading.features.col(i)[2] = (mPts.reading.features.col(i)[2])/distance;
        }
-       mPts.reading.computeFeaturesCentroid(centroid);
-       std::cout << "[Error Minimizer] Features Centroid: \n" << centroid << std::endl;
+       // Compute cross product of cross = cross(reading X normalRead)
+       const Matrix cross = this->crossProduct(mPts.reading.features, normalRead);
 
-       // 2) scale the reading cloud points s.t. their average distance from the origin is 1
-       // TODO
+       // wF = [weights*cross, weight*normals]
+       // F  = [cross, normals]
+       Matrix wF(normalRead.rows()+ cross.rows(), normalRead.cols());
+       Matrix F(normalRead.rows()+ cross.rows(), normalRead.cols());
 
-//       // Compute cross product of cross = cross(reading X normalRead)
-//       const Matrix cross = this->crossProduct(mPts.reading.features, normalRead);
+       for(int i=0; i < cross.rows(); i++)
+       {
+              wF.row(i) = mPts.weights.array() * cross.row(i).array();
+              F.row(i) = cross.row(i);
+       }
+       for(int i=0; i < normalRead.rows(); i++)
+       {
+              wF.row(i + cross.rows()) = mPts.weights.array() * normalRead.row(i).array();
+              F.row(i + cross.rows()) = normalRead.row(i);
+       }
 
-//       // wF = [weights*cross, weight*normals]
-//       // F  = [cross, normals]
-//       Matrix wF(normalRead.rows()+ cross.rows(), normalRead.cols());
-//       Matrix F(normalRead.rows()+ cross.rows(), normalRead.cols());
+       // Unadjust covariance Ap = wF * F' (from points p in reading cloud)
+       const Matrix Ap = wF * F.transpose();
+       if (Ap.fullPivHouseholderQr().rank() != Ap.rows())
+       {
+              // TODO: handle that properly
+              //throw ConvergenceError("encountered singular while minimizing point to plane distance");
+       }
 
-//       for(int i=0; i < cross.rows(); i++)
-//       {
-//              wF.row(i) = mPts.weights.array() * cross.row(i).array();
-//              F.row(i) = cross.row(i);
-//       }
-//       for(int i=0; i < normalRead.rows(); i++)
-//       {
-//              wF.row(i + cross.rows()) = mPts.weights.array() * normalRead.row(i).array();
-//              F.row(i + cross.rows()) = normalRead.row(i);
-//       }
-
-//       // Unadjust covariance A = wF * F'
-//       const Matrix A = wF * F.transpose();
-//       if (A.fullPivHouseholderQr().rank() != A.rows())
-//       {
-//              // TODO: handle that properly
-//              //throw ConvergenceError("encountered singular while minimizing point to plane distance");
-//       }
-
-
-
-       // TMP: TO BE REMOVED
        Matrix covariance(Matrix::Identity(6,6));
-       //covariance = A.transpose() * A;
+       covariance = Ap.transpose() * Ap;
        return covariance;
 }
 

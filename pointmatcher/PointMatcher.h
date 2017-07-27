@@ -283,7 +283,8 @@ struct PointMatcher
 		unsigned getFeatureDimension(const std::string& name) const;
 		unsigned getFeatureStartingRow(const std::string& name) const;
 		unsigned int computeFeaturesCentroid(Vector& centroid) const; //(simalpha)
-		
+		float computeFeaturesAverageDistanceOrigin() const; //(simalpha)
+
 		// methods related to descriptors
 		void allocateDescriptor(const std::string& name, const unsigned dim);
 		void allocateDescriptors(const Labels& newLabels);

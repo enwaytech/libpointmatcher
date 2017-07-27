@@ -521,6 +521,26 @@ unsigned int PointMatcher<T>::DataPoints::computeFeaturesCentroid(PointMatcher<T
          return this->getNbPoints();
 }
 
+//! Compute the points' average distance from the origin (0,0,0)
+//! assuming global coordinates and global reference frame in (0,0,0)
+template<typename T> //(simalpha)
+float PointMatcher<T>::DataPoints::computeFeaturesAverageDistanceOrigin() const
+{
+         if (this->getNbPoints() == 0)
+           return (0);
+
+         float distance;
+         // For each point in the cloud
+         for (size_t i = 0; i < this->getNbPoints(); ++i)
+         {
+           distance += sqrt(pow(features.col(i)[0],2) + pow(features.col(i)[1],2) + pow(features.col(i)[2],2));
+         }
+         distance /= float(this->getNbPoints());
+
+         return distance;
+}
+
+
 //------------------------------------
 // Methods related to descriptors
 //------------------------------------
