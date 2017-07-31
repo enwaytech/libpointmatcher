@@ -697,10 +697,10 @@ ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovaria
        // Fetch normal vectors of the reading point cloud (with adjustment if needed)
        // (using reading normals instead of reference normals)
        int forcedDim = dim - 1;
-       const BOOST_AUTO(normalRead, mPts.reading.getDescriptorViewByName("normals").topRows(forcedDim));
+       const BOOST_AUTO(normalRef, mPts.reference.getDescriptorViewByName("normals").topRows(forcedDim));
 
        // Note: Normal vector must be precalculated to use this error. Use appropriate input filter.
-       assert(normalRead.rows() > 0);
+       assert(normalRef.rows() > 0);
 
        // Note: Normals are stored in descriptors ("nx","ny","nz")
        // and have origin in the global reference frame (0,0,0)
@@ -728,34 +728,34 @@ ErrorMinimizersImpl<T>::PointToPlaneWithCovErrorMinimizer::estimateSystemCovaria
          mPts.reading.features.col(i)[2] = (mPts.reading.features.col(i)[2])/distance;
        }
        // Compute cross product of cross = cross(reading X normalRead)
-       const Matrix cross = this->crossProduct(mPts.reading.features, normalRead);
+       const Matrix cross = this->crossProduct(mPts.reading.features, normalRef);
 
        // wF = [weights*cross, weight*normals]
        // F  = [cross, normals]
-       Matrix wF(normalRead.rows()+ cross.rows(), normalRead.cols());
-       Matrix F(normalRead.rows()+ cross.rows(), normalRead.cols());
+       Matrix wF(normalRef.rows()+ cross.rows(), normalRef.cols());
+       Matrix F(normalRef.rows()+ cross.rows(), normalRef.cols());
 
        for(int i=0; i < cross.rows(); i++)
        {
               wF.row(i) = mPts.weights.array() * cross.row(i).array();
               F.row(i) = cross.row(i);
        }
-       for(int i=0; i < normalRead.rows(); i++)
+       for(int i=0; i < normalRef.rows(); i++)
        {
-              wF.row(i + cross.rows()) = mPts.weights.array() * normalRead.row(i).array();
-              F.row(i + cross.rows()) = normalRead.row(i);
+              wF.row(i + cross.rows()) = mPts.weights.array() * normalRef.row(i).array();
+              F.row(i + cross.rows()) = normalRef.row(i);
        }
 
-       // Unadjust covariance Ap = wF * F' (from points p in reading cloud)
-       const Matrix Ap = wF * F.transpose();
-       if (Ap.fullPivHouseholderQr().rank() != Ap.rows())
+       // Unadjust covariance A = wF * F' (from points p in reading cloud, and normals in reference)
+       const Matrix A = wF * F.transpose();
+       if (A.fullPivHouseholderQr().rank() != A.rows())
        {
               // TODO: handle that properly
               //throw ConvergenceError("encountered singular while minimizing point to plane distance");
        }
 
        Matrix covariance(Matrix::Identity(6,6));
-       covariance = Ap.transpose() * Ap;
+       covariance = A.transpose() * A;
        return covariance;
 }
 
